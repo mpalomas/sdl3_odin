@@ -1,0 +1,138 @@
+# Every Monday, looks for an SDL 3 release newer than the one pinned in upstream/release.env. When there is one, pins its tarball,
+# imports its headers, dumps its API (tools/dump, with clang) and regenerates the bindings (tools/gen), and opens a pull request
+# with all of it. A new SDL can need new overrides, so this stops at the pull request: once it's merged, run "Build SDL" for the
+# release. When tools/gen fails, the pull request still opens, with the generator's errors in its description.
+#
+# Opening the pull request requires Settings > Actions > General > "Allow GitHub Actions to create and approve pull requests".
+name: Update SDL
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: SDL version to update to (3.4.22), empty for the latest 3.x release
+        default: ''
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION_INPUT: ${{ inputs.version }}
+    steps:
+      # With the token persisted, to push the pull request's branch.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Find the release
+        id: find
+        run: |
+          pinned="$(sed -n 's/^SDL_VERSION=//p' upstream/release.env)"
+          version="$VERSION_INPUT"
+          if [[ -z "$version" ]]; then
+            # The newest release-3.x.y tag that isn't a prerelease.
+            version="$(gh api repos/libsdl-org/SDL/releases --paginate --jq '.[] | select(.prerelease | not) | .tag_name' |
+              sed -n 's/^release-\(3\.[0-9]*\.[0-9]*\)$/\1/p' | sort -V | tail -n 1)"
+          fi
+          [[ -n "$version" ]] || { echo "::error::no SDL 3 release found"; exit 1; }
+          echo "Pinned $pinned, latest $version"
+          newest="$(printf '%s\n%s\n' "$pinned" "$version" | sort -V | tail -n 1)"
+          if [[ "$version" == "$pinned" || ( -z "$VERSION_INPUT" && "$newest" == "$pinned" ) ]]; then
+            echo "SDL $pinned is up to date"
+            echo "update=false" >> "$GITHUB_OUTPUT"
+          else
+            { echo "update=true"; echo "version=$version"; } >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: ./.github/actions/setup-odin
+        if: steps.find.outputs.update == 'true'
+
+      - name: Import the release
+        if: steps.find.outputs.update == 'true'
+        env:
+          VERSION: ${{ steps.find.outputs.version }}
+        run: |
+          mkdir -p build
+          tarball="build/SDL3-$VERSION.tar.gz"
+          curl -fsSL --retry 3 -o "$tarball" "https://github.com/libsdl-org/SDL/releases/download/release-$VERSION/SDL3-$VERSION.tar.gz"
+          # GitHub's digest of the asset, against what we downloaded.
+          digest="$(gh api "repos/libsdl-org/SDL/releases/tags/release-$VERSION" \
+            --jq ".assets[] | select(.name == \"SDL3-$VERSION.tar.gz\") | .digest")"
+          sha256="$(sha256sum "$tarball" | cut -d ' ' -f 1)"
+          [[ "$digest" == "sha256:$sha256" ]] || { echo "::error::$tarball is $sha256, GitHub says $digest"; exit 1; }
+          tar -xzf "$tarball" -C build
+          rm -rf upstream/include/SDL3
+          cp -R "build/SDL3-$VERSION/include/SDL3" upstream/include/SDL3
+          cp "build/SDL3-$VERSION/LICENSE.txt" upstream/LICENSE.txt
+          cat > upstream/release.env <<EOF
+          # The SDL release whose headers are in upstream/include, built by tools/build_sdl3.sh from its source tarball.
+          SDL_VERSION=$VERSION
+          SDL_SHA256=$sha256
+          EOF
+          sed -i 's/^ *//' upstream/release.env
+          # The tree tools/build_sdl3.sh would extract, for tools/dump's list of exports.
+          echo "$sha256" > "build/SDL3-$VERSION/.sdl3_odin_stamp"
+
+      - name: Dump the API and generate the bindings
+        id: gen
+        if: steps.find.outputs.update == 'true'
+        run: |
+          odin run tools/dump -out:dump.bin
+          if odin run tools/gen -out:gen.bin -- upstream/sdl3_api.json tools/gen/overrides.txt sdl3 tools/abi > gen.log 2>&1; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+          cat gen.log
+
+      - name: Open a pull request
+        if: steps.find.outputs.update == 'true'
+        env:
+          VERSION: ${{ steps.find.outputs.version }}
+          GEN_OK: ${{ steps.gen.outputs.ok }}
+        run: |
+          branch="update/sdl-$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add -A upstream sdl3 tools/abi
+          git commit -m "Update SDL to $VERSION" -m "Headers, API dump and bindings of SDL $VERSION (https://github.com/libsdl-org/SDL/releases/tag/release-$VERSION)."
+          git push --force origin "$branch"
+
+          if [[ "$GEN_OK" == true ]]; then
+            status="tools/gen regenerated the bindings."
+          else
+            status="**tools/gen failed**, so the bindings are still the old SDL's: fix tools/gen/overrides.txt on this branch. Its output:
+
+          \`\`\`
+          $(tail -n 40 gen.log)
+          \`\`\`"
+          fi
+          body="Updates SDL to [$VERSION](https://github.com/libsdl-org/SDL/releases/tag/release-$VERSION): its headers in upstream/include, its tarball in upstream/release.env (no release is pinned until one is built), and the API dump.
+
+          $status
+
+          Before merging: check \`odin run tools/compare_vendor\`, and the diff of sdl3/ for anything that needs an override. After merging, run the \"Build SDL\" workflow, which builds and tests the libraries on every platform, makes the release and opens the pull request that pins it.
+
+          Pull requests opened by GitHub Actions do not trigger CI: close and reopen this one to run it."
+          if [[ -n "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json number --jq '.[].number')" ]]; then
+            echo "The pull request for $branch exists already, its branch is updated"
+            exit 0
+          fi
+          gh pr create --repo "$GITHUB_REPOSITORY" --base "$GITHUB_REF_NAME" --head "$branch" \
+            --title "Update SDL to $VERSION" --body "$body" || {
+            echo "::error::Cannot open the pull request. Enable Settings > Actions > General > 'Allow GitHub Actions to create and approve pull requests', or open it by hand from $branch."
+            exit 1
+          }
