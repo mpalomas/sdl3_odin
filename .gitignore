@@ -1,0 +1,11 @@
+# built by tools/build_sdl3.sh, or downloaded by tools/fetch_sdl3_libs.sh
+lib/**/*.a
+lib/**/*.so
+lib/**/*.dylib
+lib/**/*.lib
+lib/**/*.dll
+lib/**/*.txt
+/build/
+*.bin
+*.exe
+*.pdb

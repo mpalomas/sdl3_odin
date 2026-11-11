@@ -1,0 +1,498 @@
+# The Odin idioms SDL's headers can't tell, read by tools/gen (see Overrides in tools/gen/model.odin for the directives).
+# Names follow vendor:sdl3, so code written for it builds against these bindings.
+
+# FLAGS
+# Typedefs whose #define bits become a bit_set, with one constant per macro (WINDOW_FULLSCREEN :: WindowFlags{.FULLSCREEN}).
+flags SDL_InitFlags                  SDL_INIT_
+flags SDL_WindowFlags                SDL_WINDOW_
+flags SDL_GLProfile                  SDL_GL_CONTEXT_PROFILE_              GLProfileFlag
+flags SDL_GLContextFlag              SDL_GL_CONTEXT_*_FLAG                GLContextFlagBit
+flags SDL_GLContextReleaseFlag       SDL_GL_CONTEXT_RELEASE_              GLContextReleaseFlagBit
+flags SDL_GLContextResetNotification SDL_GL_CONTEXT_RESET_                GLContextResetNotificationFlag
+flags SDL_Keymod                     SDL_KMOD_                            KeymodFlag
+flags SDL_MouseButtonFlags           SDL_BUTTON_*MASK
+flags SDL_PenInputFlags              SDL_PEN_INPUT_
+flags SDL_SurfaceFlags               SDL_SURFACE_
+flags SDL_BlendMode                  SDL_BLENDMODE_                       BlendModeFlag
+flags SDL_GlobFlags                  SDL_GLOB_
+flags SDL_MessageBoxFlags            SDL_MESSAGEBOX_
+flags SDL_MessageBoxButtonFlags      SDL_MESSAGEBOX_BUTTON_
+flags SDL_TrayEntryFlags             SDL_TRAYENTRY_
+flags SDL_GPUTextureUsageFlags       SDL_GPU_TEXTUREUSAGE_
+flags SDL_GPUBufferUsageFlags        SDL_GPU_BUFFERUSAGE_
+flags SDL_GPUShaderFormat            SDL_GPU_SHADERFORMAT_                GPUShaderFormatFlag
+flags SDL_GPUColorComponentFlags     SDL_GPU_COLORCOMPONENT_
+member SDL_BUTTON_LMASK LEFT
+member SDL_BUTTON_MMASK MIDDLE
+member SDL_BUTTON_RMASK RIGHT
+member SDL_BUTTON_X1MASK X1
+member SDL_BUTTON_X2MASK X2
+
+# TYPES
+# Small value types as arrays, as in vendor:sdl3: the same layout, and Odin's array arithmetic.
+type SDL_Point           distinct [2]c.int
+type SDL_FPoint          distinct [2]f32
+type SDL_Color           distinct [4]Uint8
+type SDL_FColor          distinct [4]f32
+type SDL_MessageBoxColor distinct [3]Uint8
+type SDL_AtomicInt       distinct c.int
+type SDL_AtomicU32       distinct Uint32
+aliases SDL_GLAttr
+
+# ENUM MEMBERS
+# Members that would start with a digit, or that keep a word of their prefix, as in vendor:sdl3.
+member SDL_BITMAPORDER_4321          ORDER_4321
+member SDL_BITMAPORDER_1234          ORDER_1234
+member SDL_PACKEDLAYOUT_332          LAYOUT_332
+member SDL_PACKEDLAYOUT_4444         LAYOUT_4444
+member SDL_PACKEDLAYOUT_1555         LAYOUT_1555
+member SDL_PACKEDLAYOUT_5551         LAYOUT_5551
+member SDL_PACKEDLAYOUT_565          LAYOUT_565
+member SDL_PACKEDLAYOUT_8888         LAYOUT_8888
+member SDL_PACKEDLAYOUT_2101010      LAYOUT_2101010
+member SDL_PACKEDLAYOUT_1010102      LAYOUT_1010102
+member SDL_GPU_TEXTURETYPE_2D        D2
+member SDL_GPU_TEXTURETYPE_2D_ARRAY  D2_ARRAY
+member SDL_GPU_TEXTURETYPE_3D        D3
+member SDL_IO_SEEK_SET               SEEK_SET
+member SDL_IO_SEEK_CUR               SEEK_CUR
+member SDL_IO_SEEK_END               SEEK_END
+member SDL_PROCESS_STDIO_INHERITED   STDIO_INHERITED
+member SDL_PROCESS_STDIO_NULL        STDIO_NULL
+member SDL_PROCESS_STDIO_APP         STDIO_APP
+member SDL_PROCESS_STDIO_REDIRECT    STDIO_REDIRECT
+member SDL_TIME_FORMAT_24HR          HR24
+member SDL_TIME_FORMAT_12HR          HR12
+# The counts aren't members in vendor:sdl3 (len() gives them), and the padding only sizes the C enum.
+skip SDL_EVENT_ENUM_PADDING
+skip SDL_FOLDER_COUNT
+skip SDL_GAMEPAD_BUTTON_COUNT
+skip SDL_GAMEPAD_AXIS_COUNT
+skip SDL_JOYSTICK_TYPE_COUNT
+skip SDL_LOG_PRIORITY_COUNT
+skip SDL_MESSAGEBOX_COLOR_COUNT
+skip SDL_SYSTEM_CURSOR_COUNT
+skip SDL_PEN_AXIS_COUNT
+skip SDL_SCANCODE_COUNT
+skip SDL_SENSOR_COUNT
+
+# SKIPPED
+# SDL's own tests of the compiler.
+skip SDL_DUMMY_ENUM
+skip SDL_alignment_test
+# Odin has its own, and SDL_abs would hide it in the package.
+skip SDL_abs
+
+# EVENTS
+enum SDL_EventType Uint32
+
+# FROM VENDOR:SDL3
+# Seeded from odin run tools/compare_vendor -- --suggest: vendor:sdl3's idioms, same ABI. Its mistakes (13 wrong signatures)
+# and its older names (HapticType, HapticEffectId) were left out.
+
+# PARAMETERS AND RESULTS
+# Arrays as [^]T, nullable pointers as Maybe(^T), byte buffers as [^]u8, and typed integers, as in vendor:sdl3.
+param SDL_BeginGPUComputePass.storage_buffer_bindings [^]GPUStorageBufferReadWriteBinding
+param SDL_BeginGPUComputePass.storage_texture_bindings [^]GPUStorageTextureReadWriteBinding
+param SDL_BeginGPURenderPass.color_target_infos [^]GPUColorTargetInfo
+param SDL_BeginGPURenderPass.depth_stencil_target_info Maybe(^GPUDepthStencilTargetInfo)
+param SDL_BindAudioStreams.streams [^]^AudioStream
+param SDL_BindGPUComputeSamplers.texture_sampler_bindings [^]GPUTextureSamplerBinding
+param SDL_BindGPUComputeStorageBuffers.storage_buffers [^]^GPUBuffer
+param SDL_BindGPUComputeStorageTextures.storage_textures [^]^GPUTexture
+param SDL_BindGPUFragmentSamplers.texture_sampler_bindings [^]GPUTextureSamplerBinding
+param SDL_BindGPUFragmentStorageBuffers.storage_buffers [^]^GPUBuffer
+param SDL_BindGPUFragmentStorageTextures.storage_textures [^]^GPUTexture
+param SDL_BindGPUVertexBuffers.bindings [^]GPUBufferBinding
+param SDL_BindGPUVertexSamplers.texture_sampler_bindings [^]GPUTextureSamplerBinding
+param SDL_BindGPUVertexStorageBuffers.storage_buffers [^]^GPUBuffer
+param SDL_BindGPUVertexStorageTextures.storage_textures [^]^GPUTexture
+param SDL_BlitSurface.dstrect Maybe(^Rect)
+param SDL_BlitSurface.srcrect Maybe(^Rect)
+param SDL_BlitSurface9Grid.dstrect Maybe(^Rect)
+param SDL_BlitSurface9Grid.srcrect Maybe(^Rect)
+param SDL_BlitSurfaceScaled.dstrect Maybe(^Rect)
+param SDL_BlitSurfaceScaled.srcrect Maybe(^Rect)
+param SDL_BlitSurfaceTiled.dstrect Maybe(^Rect)
+param SDL_BlitSurfaceTiled.srcrect Maybe(^Rect)
+param SDL_BlitSurfaceTiledWithScale.dstrect Maybe(^Rect)
+param SDL_BlitSurfaceTiledWithScale.srcrect Maybe(^Rect)
+param SDL_BlitSurfaceUnchecked.dstrect Maybe(^Rect)
+param SDL_BlitSurfaceUnchecked.srcrect Maybe(^Rect)
+param SDL_BlitSurfaceUncheckedScaled.dstrect Maybe(^Rect)
+param SDL_BlitSurfaceUncheckedScaled.srcrect Maybe(^Rect)
+param SDL_ConvertAudioSamples.dst_data ^[^]Uint8
+param SDL_ConvertAudioSamples.src_data [^]Uint8
+param SDL_CreateAnimatedCursor.frames [^]CursorFrameInfo
+param SDL_CreateCursor.data [^]byte
+param SDL_CreateCursor.mask [^]Uint8
+param SDL_EnterAppMainCallbacks.argv [^]cstring
+param SDL_EventEnabled.type EventType
+param SDL_FillSurfaceRect.rect Maybe(^Rect)
+param SDL_FillSurfaceRects.rects [^]Rect
+param SDL_FlushEvent.type EventType
+param SDL_FlushEvents.maxType EventType
+param SDL_FlushEvents.minType EventType
+param SDL_GUIDToString.pszGUID [^]c.char
+param SDL_GetAudioDeviceChannelMap.return [^]c.int
+param SDL_GetAudioPlaybackDevices.return [^]AudioDeviceID
+param SDL_GetAudioRecordingDevices.return [^]AudioDeviceID
+param SDL_GetAudioStreamInputChannelMap.return [^]c.int
+param SDL_GetAudioStreamOutputChannelMap.return [^]c.int
+param SDL_GetCameraSupportedFormats.return [^]^CameraSpec
+param SDL_GetCameras.return [^]CameraID
+param SDL_GetClipboardMimeTypes.return [^][^]Uint8
+param SDL_GetClipboardText.return [^]Uint8
+param SDL_GetCurrentDirectory.return [^]c.char
+param SDL_GetDisplays.return [^]DisplayID
+param SDL_GetEnvironmentVariables.return [^]cstring
+param SDL_GetEventDescription.buf [^]u8
+param SDL_GetFullscreenDisplayModes.return [^]^DisplayMode
+param SDL_GetGamepadBindings.return [^]^GamepadBinding
+param SDL_GetGamepadMapping.return [^]byte
+param SDL_GetGamepadMappingForGUID.return [^]byte
+param SDL_GetGamepadMappingForID.return [^]byte
+param SDL_GetGamepadMappings.return [^][^]byte
+param SDL_GetGamepadSensorData.data [^]f32
+param SDL_GetGamepads.return [^]JoystickID
+param SDL_GetJoysticks.return [^]JoystickID
+param SDL_GetKeyboardState.return [^]bool
+param SDL_GetKeyboards.return [^]KeyboardID
+param SDL_GetLogPriority.category LogCategory
+param SDL_GetMice.return [^]MouseID
+param SDL_GetPrefPath.return [^]c.char
+param SDL_GetPreferredLocales.return [^]^Locale
+param SDL_GetPrimarySelectionText.return [^]Uint8
+param SDL_GetRectEnclosingPoints.clip Maybe(^Rect)
+param SDL_GetRectEnclosingPoints.points [^]Point
+param SDL_GetRectEnclosingPointsFloat.clip Maybe(^FRect)
+param SDL_GetRectEnclosingPointsFloat.points [^]FPoint
+param SDL_GetRenderTarget.return Maybe(^Texture)
+param SDL_GetSensorData.data [^]f32
+param SDL_GetSensors.return [^]SensorID
+param SDL_GetSurfaceImages.return [^]^Surface
+param SDL_GetTouchDevices.return [^]TouchID
+param SDL_GetTouchFingers.return [^]^Finger
+param SDL_GetTrayEntries.return [^]^TrayEntry
+param SDL_GetWindows.return [^]^Window
+param SDL_GlobDirectory.return [^][^]c.char
+param SDL_GlobStorageDirectory.return [^][^]c.char
+param SDL_HasEvent.type EventType
+param SDL_HasEvents.maxType EventType
+param SDL_HasEvents.minType EventType
+param SDL_LoadWAV.audio_buf ^[^]Uint8
+param SDL_LoadWAV_IO.audio_buf ^[^]Uint8
+param SDL_LockTexture.rect Maybe(^Rect)
+param SDL_LockTextureToSurface.rect Maybe(^Rect)
+param SDL_MixAudio.dst [^]Uint8
+param SDL_MixAudio.src [^]Uint8
+param SDL_PeepEvents.events [^]Event
+param SDL_PeepEvents.maxType EventType
+param SDL_PeepEvents.minType EventType
+param SDL_PutAudioStreamPlanarData.channel_buffers [^]rawptr
+param SDL_RenderFillRect.rect Maybe(^FRect)
+param SDL_RenderFillRects.rects [^]FRect
+param SDL_RenderGeometry.indices [^]c.int
+param SDL_RenderGeometry.texture Maybe(^Texture)
+param SDL_RenderGeometry.vertices [^]Vertex
+param SDL_RenderGeometryRaw.color [^]FColor
+param SDL_RenderGeometryRaw.texture Maybe(^Texture)
+param SDL_RenderGeometryRaw.uv [^]f32
+param SDL_RenderGeometryRaw.xy [^]f32
+param SDL_RenderLines.points [^]FPoint
+param SDL_RenderPoints.points [^]FPoint
+param SDL_RenderReadPixels.rect Maybe(^Rect)
+param SDL_RenderRect.rect Maybe(^FRect)
+param SDL_RenderRects.rects [^]FRect
+param SDL_RenderTexture.dstrect Maybe(^FRect)
+param SDL_RenderTexture.srcrect Maybe(^FRect)
+param SDL_RenderTexture9Grid.dstrect Maybe(^FRect)
+param SDL_RenderTexture9Grid.srcrect Maybe(^FRect)
+param SDL_RenderTexture9GridTiled.dstrect Maybe(^FRect)
+param SDL_RenderTexture9GridTiled.srcrect Maybe(^FRect)
+param SDL_RenderTextureAffine.down Maybe(^FPoint)
+param SDL_RenderTextureAffine.origin Maybe(^FPoint)
+param SDL_RenderTextureAffine.right Maybe(^FPoint)
+param SDL_RenderTextureAffine.srcrect Maybe(^FRect)
+param SDL_RenderTextureRotated.center Maybe(^FPoint)
+param SDL_RenderTextureRotated.dstrect Maybe(^FRect)
+param SDL_RenderTextureRotated.srcrect Maybe(^FRect)
+param SDL_RenderTextureTiled.dstrect Maybe(^FRect)
+param SDL_RenderTextureTiled.srcrect Maybe(^FRect)
+param SDL_RunApp.argv [^]cstring
+param SDL_SendJoystickVirtualSensorData.data [^]f32
+param SDL_SetAudioStreamInputChannelMap.chmap [^]c.int
+param SDL_SetAudioStreamOutputChannelMap.chmap [^]c.int
+param SDL_SetEventEnabled.type EventType
+param SDL_SetLogPriority.category LogCategory
+param SDL_SetPaletteColors.colors [^]Color
+param SDL_SetRenderClipRect.rect Maybe(^Rect)
+param SDL_SetRenderTarget.texture Maybe(^Texture)
+param SDL_SetRenderViewport.rect Maybe(^Rect)
+param SDL_SetSurfaceClipRect.rect Maybe(^Rect)
+param SDL_SetTextInputArea.rect Maybe(^Rect)
+param SDL_ShowOpenFileDialog.filters [^]DialogFileFilter
+param SDL_ShowSaveFileDialog.filters [^]DialogFileFilter
+param SDL_StretchSurface.dstrect Maybe(^Rect)
+param SDL_StretchSurface.srcrect Maybe(^Rect)
+param SDL_UCS4ToUTF8.dst [^]u8
+param SDL_UCS4ToUTF8.return [^]u8
+param SDL_UnbindAudioStreams.streams [^]^AudioStream
+param SDL_UpdateNVTexture.UVplane [^]Uint8
+param SDL_UpdateNVTexture.Yplane [^]Uint8
+param SDL_UpdateNVTexture.rect Maybe(^Rect)
+param SDL_UpdateTexture.rect Maybe(^Rect)
+param SDL_UpdateWindowSurfaceRects.rects [^]Rect
+param SDL_UpdateYUVTexture.Uplane [^]Uint8
+param SDL_UpdateYUVTexture.Vplane [^]Uint8
+param SDL_UpdateYUVTexture.Yplane [^]Uint8
+param SDL_UpdateYUVTexture.rect Maybe(^Rect)
+param SDL_Vulkan_CreateSurface.allocator Maybe(^vk.AllocationCallbacks)
+param SDL_Vulkan_DestroySurface.allocator Maybe(^vk.AllocationCallbacks)
+param SDL_WaitForGPUFences.fences [^]^GPUFence
+param SDL_asprintf.strp ^[^]u8
+param SDL_hid_get_feature_report.data [^]byte
+param SDL_hid_get_indexed_string.string [^]c.wchar_t
+param SDL_hid_get_input_report.data [^]byte
+param SDL_hid_get_manufacturer_string.string [^]c.wchar_t
+param SDL_hid_get_product_string.string [^]c.wchar_t
+param SDL_hid_get_report_descriptor.buf [^]byte
+param SDL_hid_get_serial_number_string.string [^]c.wchar_t
+param SDL_hid_open.serial_number [^]c.wchar_t
+param SDL_hid_read.data [^]byte
+param SDL_hid_read_timeout.data [^]byte
+param SDL_hid_send_feature_report.data [^]byte
+param SDL_hid_write.data [^]byte
+param SDL_iconv.outbuf ^[^]u8
+param SDL_iconv_string.return [^]byte
+param SDL_isalnum.return b32
+param SDL_isalnum.x rune
+param SDL_isalpha.return b32
+param SDL_isalpha.x rune
+param SDL_isblank.return b32
+param SDL_isblank.x rune
+param SDL_iscntrl.return b32
+param SDL_iscntrl.x rune
+param SDL_isdigit.return b32
+param SDL_isdigit.x rune
+param SDL_isgraph.return b32
+param SDL_isgraph.x rune
+param SDL_islower.return b32
+param SDL_islower.x rune
+param SDL_isprint.return b32
+param SDL_isprint.x rune
+param SDL_ispunct.return b32
+param SDL_ispunct.x rune
+param SDL_isspace.return b32
+param SDL_isspace.x rune
+param SDL_isupper.return b32
+param SDL_isupper.x rune
+param SDL_isxdigit.return b32
+param SDL_isxdigit.x rune
+param SDL_itoa.return [^]u8
+param SDL_itoa.str [^]u8
+param SDL_lltoa.return [^]u8
+param SDL_lltoa.str [^]u8
+param SDL_ltoa.return [^]u8
+param SDL_ltoa.str [^]u8
+param SDL_setenv_unsafe.overwrite b32
+param SDL_snprintf.text [^]u8
+param SDL_strcasestr.return [^]u8
+param SDL_strchr.c rune
+param SDL_strchr.return [^]u8
+param SDL_strdup.return [^]u8
+param SDL_strlcat.dst [^]u8
+param SDL_strlcpy.dst [^]u8
+param SDL_strlwr.return [^]u8
+param SDL_strlwr.str [^]u8
+param SDL_strndup.return [^]u8
+param SDL_strnstr.return [^]u8
+param SDL_strpbrk.return [^]u8
+param SDL_strrchr.c rune
+param SDL_strrchr.return [^]u8
+param SDL_strrev.return [^]u8
+param SDL_strrev.str [^]u8
+param SDL_strstr.return [^]u8
+param SDL_strtod.endp ^[^]u8
+param SDL_strtok_r.return [^]u8
+param SDL_strtok_r.saveptr ^[^]u8
+param SDL_strtok_r.str [^]u8
+param SDL_strtol.endp ^[^]u8
+param SDL_strtoll.endp ^[^]u8
+param SDL_strtoul.endp ^[^]u8
+param SDL_strtoull.endp ^[^]u8
+param SDL_strupr.return [^]u8
+param SDL_strupr.str [^]u8
+param SDL_swprintf.fmt cstring
+param SDL_swprintf.text [^]c.wchar_t
+param SDL_tolower.return rune
+param SDL_tolower.x rune
+param SDL_toupper.return rune
+param SDL_toupper.x rune
+param SDL_uitoa.return [^]u8
+param SDL_uitoa.str [^]u8
+param SDL_ulltoa.return [^]u8
+param SDL_ulltoa.str [^]u8
+param SDL_ultoa.return [^]u8
+param SDL_ultoa.str [^]u8
+param SDL_utf8strlcpy.dst [^]u8
+param SDL_vasprintf.strp ^[^]u8
+param SDL_vsnprintf.text [^]u8
+param SDL_vswprintf.fmt cstring
+param SDL_vswprintf.text [^]c.wchar_t
+param SDL_wcscasecmp.str1 [^]c.wchar_t
+param SDL_wcscasecmp.str2 [^]c.wchar_t
+param SDL_wcscmp.str1 [^]c.wchar_t
+param SDL_wcscmp.str2 [^]c.wchar_t
+param SDL_wcsdup.return [^]c.wchar_t
+param SDL_wcsdup.wstr [^]c.wchar_t
+param SDL_wcslcat.dst [^]c.wchar_t
+param SDL_wcslcat.src [^]c.wchar_t
+param SDL_wcslcpy.dst [^]c.wchar_t
+param SDL_wcslcpy.src [^]c.wchar_t
+param SDL_wcslen.wstr [^]c.wchar_t
+param SDL_wcsncasecmp.str1 [^]c.wchar_t
+param SDL_wcsncasecmp.str2 [^]c.wchar_t
+param SDL_wcsncmp.str1 [^]c.wchar_t
+param SDL_wcsncmp.str2 [^]c.wchar_t
+param SDL_wcsnlen.wstr [^]c.wchar_t
+param SDL_wcsnstr.haystack [^]c.wchar_t
+param SDL_wcsnstr.needle [^]c.wchar_t
+param SDL_wcsnstr.return [^]c.wchar_t
+param SDL_wcsstr.haystack [^]c.wchar_t
+param SDL_wcsstr.needle [^]c.wchar_t
+param SDL_wcsstr.return [^]c.wchar_t
+param SDL_wcstol.endp ^[^]c.wchar_t
+param SDL_wcstol.str [^]c.wchar_t
+
+# BY POINTER
+# `const T *` parameters taken as #by_ptr values, as in vendor:sdl3.
+byptr SDL_AttachVirtualJoystick.desc
+byptr SDL_BindGPUIndexBuffer.binding
+byptr SDL_BlitGPUTexture.info
+byptr SDL_CopyGPUBufferToBuffer.destination
+byptr SDL_CopyGPUBufferToBuffer.source
+byptr SDL_CopyGPUTextureToTexture.destination
+byptr SDL_CopyGPUTextureToTexture.source
+byptr SDL_CreateGPUBuffer.createinfo
+byptr SDL_CreateGPUComputePipeline.createinfo
+byptr SDL_CreateGPUGraphicsPipeline.createinfo
+byptr SDL_CreateGPURenderState.createinfo
+byptr SDL_CreateGPUSampler.createinfo
+byptr SDL_CreateGPUShader.createinfo
+byptr SDL_CreateGPUTexture.createinfo
+byptr SDL_CreateGPUTransferBuffer.createinfo
+byptr SDL_CreateHapticEffect.effect
+byptr SDL_DateTimeToTime.dt
+byptr SDL_DownloadFromGPUBuffer.destination
+byptr SDL_DownloadFromGPUBuffer.source
+byptr SDL_DownloadFromGPUTexture.destination
+byptr SDL_DownloadFromGPUTexture.source
+byptr SDL_GetDisplayForPoint.point
+byptr SDL_GetDisplayForRect.rect
+byptr SDL_GetEventDescription.event
+byptr SDL_GetRectAndLineIntersection.rect
+byptr SDL_GetRectAndLineIntersectionFloat.rect
+byptr SDL_GetRectIntersection.A
+byptr SDL_GetRectIntersection.B
+byptr SDL_GetRectIntersectionFloat.A
+byptr SDL_GetRectIntersectionFloat.B
+byptr SDL_GetRectUnion.A
+byptr SDL_GetRectUnion.B
+byptr SDL_GetRectUnionFloat.A
+byptr SDL_GetRectUnionFloat.B
+byptr SDL_GetWindowFromEvent.event
+byptr SDL_HapticEffectSupported.effect
+byptr SDL_HasRectIntersection.A
+byptr SDL_HasRectIntersection.B
+byptr SDL_HasRectIntersectionFloat.A
+byptr SDL_HasRectIntersectionFloat.B
+byptr SDL_SetGPUScissor.scissor
+byptr SDL_SetGPUViewport.viewport
+byptr SDL_SetWindowFullscreenMode.mode
+byptr SDL_ShowMessageBox.messageboxdata
+byptr SDL_UpdateHapticEffect.data
+byptr SDL_UploadToGPUBuffer.destination
+byptr SDL_UploadToGPUBuffer.source
+byptr SDL_UploadToGPUTexture.destination
+byptr SDL_UploadToGPUTexture.source
+
+# FIELDS
+field SDL_ClipboardEvent.mime_types [^]cstring
+field SDL_CommonEvent.type EventType
+field SDL_GPUComputePipelineCreateInfo.code [^]Uint8
+field SDL_GPUGraphicsPipelineTargetInfo.color_target_descriptions [^]GPUColorTargetDescription
+field SDL_GPURenderStateCreateInfo.sampler_bindings [^]GPUTextureSamplerBinding
+field SDL_GPURenderStateCreateInfo.storage_buffers [^]^GPUBuffer
+field SDL_GPURenderStateCreateInfo.storage_textures [^]^GPUTexture
+field SDL_GPUShaderCreateInfo.code [^]Uint8
+field SDL_GPUVertexInputState.vertex_attributes [^]GPUVertexAttribute
+field SDL_GPUVertexInputState.vertex_buffer_descriptions [^]GPUVertexBufferDescription
+field SDL_GPUVulkanOptions.device_extension_names [^]cstring
+field SDL_GPUVulkanOptions.instance_extension_names [^]cstring
+field SDL_HapticCustom.data [^]Uint16
+field SDL_MessageBoxData.buttons [^]MessageBoxButtonData
+field SDL_MouseWheelEvent.integer_x i32
+field SDL_MouseWheelEvent.integer_y i32
+field SDL_StorageInterface.copy proc "c" (userdata: rawptr, oldpath, newpath: cstring) -> bool
+field SDL_StorageInterface.rename proc "c" (userdata: rawptr, oldpath, newpath: cstring) -> bool
+field SDL_hid_device_info.manufacturer_string [^]c.wchar_t
+field SDL_hid_device_info.path [^]c.char
+field SDL_hid_device_info.product_string [^]c.wchar_t
+field SDL_hid_device_info.serial_number [^]c.wchar_t
+
+# RAW UNION TAGS
+# Which member of a raw union each event type uses, for fmt and the debugger.
+tag SDL_GamepadBinding.input.button input_type=.BUTTON
+tag SDL_GamepadBinding.input.axis input_type=.AXIS
+tag SDL_GamepadBinding.input.hat input_type=.HAT
+tag SDL_GamepadBinding.output.button output_type=.BUTTON
+tag SDL_GamepadBinding.output.axis output_type=.AXIS
+
+# OTHERS
+param SDL_UCS4ToUTF8.codepoint rune
+# Not [MessageBoxColorType]MessageBoxColor as in vendor:sdl3: the enum has a COUNT member, which makes that array 6 long.
+
+# THE EVENT UNION
+# Each member's raw_union_tag lists the event types that use it, as in vendor:sdl3, for fmt and the debugger.
+field SDL_Event.type EventType
+field SDL_Palette.colors [^]Color
+tag SDL_Event.type type=FIRST
+tag SDL_Event.common type=TERMINATE,LOW_MEMORY,WILL_ENTER_BACKGROUND,DID_ENTER_BACKGROUND,WILL_ENTER_FOREGROUND,DID_ENTER_FOREGROUND,LOCALE_CHANGED,SYSTEM_THEME_CHANGED,POLL_SENTINEL
+tag SDL_Event.display type=DISPLAY_ORIENTATION,DISPLAY_ADDED,DISPLAY_REMOVED,DISPLAY_MOVED,DISPLAY_DESKTOP_MODE_CHANGED,DISPLAY_CURRENT_MODE_CHANGED,DISPLAY_CONTENT_SCALE_CHANGED
+tag SDL_Event.window type=WINDOW_SHOWN,WINDOW_HIDDEN,WINDOW_EXPOSED,WINDOW_MOVED,WINDOW_RESIZED,WINDOW_PIXEL_SIZE_CHANGED,WINDOW_METAL_VIEW_RESIZED,WINDOW_MINIMIZED,WINDOW_MAXIMIZED,WINDOW_RESTORED,WINDOW_MOUSE_ENTER,WINDOW_MOUSE_LEAVE,WINDOW_FOCUS_GAINED,WINDOW_FOCUS_LOST,WINDOW_CLOSE_REQUESTED,WINDOW_HIT_TEST,WINDOW_ICCPROF_CHANGED,WINDOW_DISPLAY_CHANGED,WINDOW_DISPLAY_SCALE_CHANGED,WINDOW_SAFE_AREA_CHANGED,WINDOW_OCCLUDED,WINDOW_ENTER_FULLSCREEN,WINDOW_LEAVE_FULLSCREEN,WINDOW_DESTROYED
+tag SDL_Event.kdevice type=KEYMAP_CHANGED,KEYBOARD_ADDED,KEYBOARD_REMOVED
+tag SDL_Event.key type=KEY_DOWN,KEY_UP
+tag SDL_Event.edit type=TEXT_EDITING
+tag SDL_Event.edit_candidates type=TEXT_EDITING_CANDIDATES
+tag SDL_Event.text type=TEXT_INPUT
+tag SDL_Event.mdevice type=MOUSE_ADDED,MOUSE_REMOVED
+tag SDL_Event.motion type=MOUSE_MOTION
+tag SDL_Event.button type=MOUSE_BUTTON_DOWN,MOUSE_BUTTON_UP
+tag SDL_Event.wheel type=MOUSE_WHEEL
+tag SDL_Event.jdevice type=JOYSTICK_ADDED,JOYSTICK_REMOVED,JOYSTICK_UPDATE_COMPLETE
+tag SDL_Event.jaxis type=JOYSTICK_AXIS_MOTION
+tag SDL_Event.jball type=JOYSTICK_BALL_MOTION
+tag SDL_Event.jhat type=JOYSTICK_HAT_MOTION
+tag SDL_Event.jbutton type=JOYSTICK_BUTTON_DOWN,JOYSTICK_BUTTON_UP
+tag SDL_Event.jbattery type=JOYSTICK_BATTERY_UPDATED
+tag SDL_Event.gdevice type=GAMEPAD_ADDED,GAMEPAD_REMOVED,GAMEPAD_REMAPPED,GAMEPAD_UPDATE_COMPLETE,GAMEPAD_STEAM_HANDLE_UPDATED
+tag SDL_Event.gaxis type=GAMEPAD_AXIS_MOTION
+tag SDL_Event.gbutton type=GAMEPAD_BUTTON_DOWN,GAMEPAD_BUTTON_UP
+tag SDL_Event.gtouchpad type=GAMEPAD_TOUCHPAD_DOWN,GAMEPAD_TOUCHPAD_MOTION,GAMEPAD_TOUCHPAD_UP
+tag SDL_Event.gsensor type=GAMEPAD_SENSOR_UPDATE
+tag SDL_Event.adevice type=AUDIO_DEVICE_ADDED,AUDIO_DEVICE_REMOVED,AUDIO_DEVICE_FORMAT_CHANGED
+tag SDL_Event.cdevice type=CAMERA_DEVICE_ADDED,CAMERA_DEVICE_REMOVED,CAMERA_DEVICE_APPROVED,CAMERA_DEVICE_DENIED
+tag SDL_Event.sensor type=SENSOR_UPDATE
+tag SDL_Event.quit type=QUIT
+tag SDL_Event.user type=USER
+tag SDL_Event.tfinger type=FINGER_DOWN,FINGER_UP,FINGER_MOTION,FINGER_CANCELED
+tag SDL_Event.pinch type=PINCH_BEGIN,PINCH_UPDATE,PINCH_END
+tag SDL_Event.pproximity type=PEN_PROXIMITY_IN,PEN_PROXIMITY_OUT
+tag SDL_Event.ptouch type=PEN_DOWN,PEN_UP
+tag SDL_Event.pmotion type=PEN_MOTION
+tag SDL_Event.pbutton type=PEN_BUTTON_DOWN,PEN_BUTTON_UP
+tag SDL_Event.paxis type=PEN_AXIS
+tag SDL_Event.render type=RENDER_TARGETS_RESET,RENDER_DEVICE_RESET,RENDER_DEVICE_LOST
+tag SDL_Event.drop type=DROP_FILE,DROP_TEXT,DROP_BEGIN,DROP_COMPLETE,DROP_POSITION
+tag SDL_Event.clipboard type=CLIPBOARD_UPDATE
