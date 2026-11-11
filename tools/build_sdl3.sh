@@ -72,12 +72,12 @@ if [ -d upstream/patches ]; then
 	while IFS= read -r patch; do PATCHES+=("$patch"); done < <(find upstream/patches -name '*.patch' | sort)
 fi
 STAMP="$SDL_SHA256"
-for patch in "${PATCHES[@]}"; do STAMP="$STAMP $(sha256 "$patch")"; done
+for patch in ${PATCHES[@]+"${PATCHES[@]}"}; do STAMP="$STAMP $(sha256 "$patch")"; done
 if [ ! -f "$SRC/.sdl3_odin_stamp" ] || [ "$(cat "$SRC/.sdl3_odin_stamp")" != "$STAMP" ]; then
 	echo "==> extracting $TARBALL"
 	rm -rf "$SRC"
 	tar -xzf "$TARBALL" -C build
-	for patch in "${PATCHES[@]}"; do
+	for patch in ${PATCHES[@]+"${PATCHES[@]}"}; do
 		echo "==> applying $patch"
 		patch -d "$SRC" -p1 --forward --silent <"$patch"
 	done

@@ -27,6 +27,7 @@ PLUMBING := []string{
 	"SDL_IN_*", "SDL_INOUT_*", "SDL_ALLOC_SIZE*", "SDL_PRINTF_VARARG_FUNC*", "SDL_SCANF_VARARG_FUNC*",
 	"SDL_WSCANF_VARARG_FUNC", "SDL_ENABLE_OLD_NAMES", "SDL_COMPILE_TIME_ASSERT", "SDL_INIT_INTERFACE", "SDL_PRI*",
 	"SDL_SCN*", "SDL_ASSERT_FILE", "SDL_assert*",
+	"SDL_ELF_NOTE_*", // dlopen annotations, only on ELF platforms
 }
 
 @(private="file")

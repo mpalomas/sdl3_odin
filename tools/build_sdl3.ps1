@@ -89,7 +89,7 @@ function Invoke-Logged([string]$Log, [scriptblock]$Command) {
 }
 
 # CHECK
-function Test-Features([string]$Config) {
+function Test-BuildConfig([string]$Config) {
     $defined = @{}
     foreach ($line in Get-Content $Config) {
         if ($line -match '^#define (\w+)') { $defined[$Matches[1]] = $true }
@@ -135,7 +135,7 @@ foreach ($l in $linkages) {
     if (-not $config) { $config = Get-ChildItem $dir -Recurse -Filter SDL_build_config.h | Select-Object -First 1 }
     $summary = Get-Content $config.FullName | Select-String '^#define (SDL_(VIDEO_DRIVER|AUDIO_DRIVER|JOYSTICK|HAPTIC|SENSOR|VIDEO_OPENGL|VIDEO_VULKAN)\w*) 1'
     Write-Host (($summary | ForEach-Object { $_.Matches.Groups[1].Value }) -join ' ')
-    if (-not (Test-Features $config.FullName)) { throw "the $l build lacks expected features (configure log: $dir.configure.log)" }
+    if (-not (Test-BuildConfig $config.FullName)) { throw "the $l build lacks expected features (configure log: $dir.configure.log)" }
 
     Write-Host "==> building $l"
     Invoke-Logged "$dir.build.log" { cmake --build $dir --config MinSizeRel --parallel }
