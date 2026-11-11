@@ -14,11 +14,13 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO"
 OUT="build/abi"
 mkdir -p "$OUT"
+EXE=""
+case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) EXE=.exe ;; esac # Git Bash on Windows
 
-"${CC:-cc}" -w -I upstream/include -o "$OUT/abi_check_c" tools/abi/abi_check.c
-odin build tools/abi/odin -out:"$OUT/abi_check_odin"
-"$OUT/abi_check_c" | tr -d '\r' >"$OUT/c.txt"
-"$OUT/abi_check_odin" | tr -d '\r' >"$OUT/odin.txt"
+"${CC:-cc}" -w -I upstream/include -o "$OUT/abi_check_c$EXE" tools/abi/abi_check.c
+odin build tools/abi/odin -out:"$OUT/abi_check_odin$EXE"
+"$OUT/abi_check_c$EXE" | tr -d '\r' >"$OUT/c.txt"
+"$OUT/abi_check_odin$EXE" | tr -d '\r' >"$OUT/odin.txt"
 if ! diff -u "$OUT/c.txt" "$OUT/odin.txt" >"$OUT/diff.txt"; then
 	head -n 60 "$OUT/diff.txt"
 	echo "abi: the bindings differ from the C headers ($(grep -c '^[-+][^-+]' "$OUT/diff.txt") lines, see $OUT/diff.txt)" >&2
