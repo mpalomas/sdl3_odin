@@ -96,7 +96,7 @@ check_features() {
 	while IFS= read -r line; do
 		case "$line" in "" | "#"*) continue ;; esac
 		want="${line:0:1}" name="${line:1}"
-		if grep -q "^#define $name\b" "$config"; then
+		if grep -qE "^#define $name( |$)" "$config"; then
 			[ "$want" = "-" ] && { echo "build_sdl3: $name is on, upstream/sdl3_expected_$OS.txt says off" >&2; failed=1; }
 		elif [ "$want" = "+" ]; then
 			if [[ " ${SDL3_ALLOW_MISSING:-} " == *" $name "* ]]; then
@@ -136,8 +136,12 @@ for linkage in $LINKAGES; do
 	cmake -S "$SRC" -B "$dir" --fresh -G Ninja -C upstream/sdl3_options.cmake \
 		-DSDL_SHARED="$shared" -DSDL_STATIC="$static" >"$dir.configure.log" 2>&1 ||
 		{ tail -n 30 "$dir.configure.log" >&2; die "configure failed, see $dir.configure.log"; }
-	check_features "$dir/include-config-minsizerel/build_config/SDL_build_config.h" ||
-		die "the $linkage build lacks expected features (configure log: $dir.configure.log)"
+	config="$dir/include-config-minsizerel/build_config/SDL_build_config.h"
+	# What the build has, for the log.
+	grep -E '^#define SDL_(VIDEO_DRIVER|AUDIO_DRIVER|JOYSTICK|HAPTIC|SENSOR|VIDEO_OPENGL|VIDEO_VULKAN|VIDEO_METAL)[A-Z0-9_]* 1' "$config" |
+		sed 's/^#define \([A-Z0-9_]*\).*/\1/' | tr '\n' ' ' || true
+	echo
+	check_features "$config" || die "the $linkage build lacks expected features (configure log: $dir.configure.log)"
 
 	echo "==> building $linkage"
 	cmake --build "$dir" -j "$JOBS" >"$dir.build.log" 2>&1 ||
@@ -147,7 +151,14 @@ for linkage in $LINKAGES; do
 		cp "$dir/libSDL3.a" "$LIB_DIR/libSDL3.a"
 	else
 		cp -L "$dir/$SHARED_FILE" "$LIB_DIR/$SHARED_FILE"
-		if [ "$OS" = linux ]; then strip --strip-all "$LIB_DIR/$SHARED_FILE"; else strip -x "$LIB_DIR/$SHARED_FILE"; fi
+		if [ "$OS" = linux ]; then
+			strip --strip-all "$LIB_DIR/$SHARED_FILE"
+		else
+			# Found through the program's rpath, under the name it's shipped with.
+			install_name_tool -id @rpath/libSDL3.dylib "$LIB_DIR/$SHARED_FILE"
+			strip -x "$LIB_DIR/$SHARED_FILE"
+			codesign --force --sign - "$LIB_DIR/$SHARED_FILE"
+		fi
 		check_shared "$LIB_DIR/$SHARED_FILE"
 	fi
 done

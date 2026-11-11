@@ -1,0 +1,136 @@
+# Checks the generator and the generated files, builds SDL from the pinned tarball on Linux, macOS and Windows, and runs the ABI
+# check and the smoke tests (on the dummy video and audio drivers) against the static and the shared library. Also type-checks
+# everything for every platform, and lints the scripts.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-odin
+
+      # Also checks that sdl3/*_generated.odin and tools/abi/ are what the generator makes of upstream/.
+      - name: Test the generator
+        run: odin test tools/gen -out:gen_test.bin
+
+      # The package refuses to compile without its libraries, and type-checking does not link: empty files stand in for them.
+      - name: Create placeholder libraries
+        run: |
+          mkdir -p lib/linux-x86_64 lib/macos-arm64 lib/windows-x86_64
+          touch lib/linux-x86_64/libSDL3.a lib/linux-x86_64/libSDL3.so
+          touch lib/macos-arm64/libSDL3.a lib/macos-arm64/libSDL3.dylib
+          touch lib/windows-x86_64/SDL3.lib lib/windows-x86_64/SDL3.dll.lib
+
+      - name: Type-check the package, the tests and the tools
+        run: |
+          for target in linux_amd64 darwin_arm64 windows_amd64; do
+            echo "::group::$target"
+            odin check sdl3 -no-entry-point -vet -target:$target
+            odin check sdl3 -no-entry-point -vet -target:$target -define:SDL3_SHARED=true
+            odin check tests -no-entry-point -vet -target:$target
+            echo "::endgroup::"
+          done
+          for tool in tools/dump tools/gen tools/compare_vendor; do
+            odin check "$tool" -vet
+          done
+
+      - name: Check the scripts
+        run: shellcheck --severity=warning tools/*.sh tools/abi/*.sh
+
+      # Write-Host is allowed: the scripts print progress for people, apart from their output.
+      - name: Check the PowerShell scripts
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
+            Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          }
+          $issues = Invoke-ScriptAnalyzer -Path tools -Recurse -Severity Warning, Error -ExcludeRule PSAvoidUsingWriteHost
+          $issues | Format-Table ScriptName, Line, RuleName, Message -AutoSize -Wrap | Out-String -Width 200
+          if ($issues) { exit 1 }
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+          - platform: macos-arm64
+            runner: macos-latest
+          - platform: windows-x86_64
+            runner: windows-2025-vs2026
+            cmake_generator: Visual Studio 18 2026
+    name: build (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      PLATFORM: ${{ matrix.platform }}
+      CMAKE_GENERATOR: ${{ matrix.cmake_generator }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-odin
+
+      - name: Install the build dependencies
+        if: runner.os == 'Linux'
+        run: tools/install_build_deps.sh
+
+      - name: Install Ninja
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Build SDL
+        if: runner.os != 'Windows'
+        run: |
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            export MACOSX_DEPLOYMENT_TARGET=13.0
+          fi
+          tools/ci_annotate.sh "Build SDL ($PLATFORM)" tools/build_sdl3.sh all
+
+      - name: Build SDL
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: tools/build_sdl3.ps1 all
+
+      # Git Bash and clang on Windows, which targets the MSVC ABI like Odin.
+      - name: Check the ABI
+        if: ${{ !cancelled() }}
+        run: |
+          if [[ "$RUNNER_OS" == Windows ]]; then export CC=clang; fi
+          tools/ci_annotate.sh "ABI check ($PLATFORM)" tools/abi/check.sh
+
+      - name: Run the tests
+        if: ${{ !cancelled() }}
+        run: |
+          exe=bin; if [[ "$RUNNER_OS" == Windows ]]; then exe=exe; fi
+          tools/ci_annotate.sh "Tests ($PLATFORM)" odin test tests -out:tests.$exe
+          # Next to the shared library, which it finds through its rpath (the executable's directory on Windows).
+          tools/ci_annotate.sh "Tests, shared ($PLATFORM)" odin test tests -define:SDL3_SHARED=true -out:lib/"$PLATFORM"/tests-shared.$exe
+
+      - name: Show the libraries
+        if: ${{ !cancelled() }}
+        run: ls -l lib/"$PLATFORM"

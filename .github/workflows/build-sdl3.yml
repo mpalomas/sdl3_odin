@@ -1,0 +1,244 @@
+# Builds the pinned SDL (upstream/release.env) static and shared for Linux, macOS and Windows, and checks the libraries against
+# the bindings (ABI check, smoke tests). With `publish`, then creates the release sdl3-<version>[-r<revision>] with the
+# libraries, the build options and the sources they come from, and opens a pull request that pins the release in
+# upstream/release.env (read by tools/fetch_sdl3_libs.sh).
+#
+# Opening the pull request requires Settings > Actions > General > "Allow GitHub Actions to create and approve pull requests".
+name: Build SDL
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Build revision, for a new release of the same SDL (other options or build); 1 for none
+        default: '1'
+      publish:
+        description: Publish a release and open a pull request that pins it
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      revision:
+        type: string
+        default: '1'
+      publish:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sdl_version: ${{ steps.resolve.outputs.SDL_VERSION }}
+      release_tag: ${{ steps.resolve.outputs.RELEASE_TAG }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Resolve the versions
+        id: resolve
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: |
+          [[ "$REVISION" =~ ^[1-9][0-9]*$ ]] || { echo "::error::revision must be a positive number"; exit 1; }
+          version="$(sed -n 's/^SDL_VERSION=//p' upstream/release.env)"
+          release="sdl3-$version"
+          if [[ "$REVISION" != 1 ]]; then
+            release="$release-r$REVISION"
+          fi
+          { echo "SDL_VERSION=$version"; echo "RELEASE_TAG=$release"; } | tee -a "$GITHUB_OUTPUT"
+
+  # Without Odin: Linux on the oldest runner, so the libraries need an older glibc. macOS 13+. Windows with Visual Studio 2026.
+  build:
+    needs: resolve
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-22.04
+          - platform: macos-arm64
+            runner: macos-latest
+          - platform: windows-x86_64
+            runner: windows-2025-vs2026
+            cmake_generator: Visual Studio 18 2026
+    name: build (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      PLATFORM: ${{ matrix.platform }}
+      CMAKE_GENERATOR: ${{ matrix.cmake_generator }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install the build dependencies
+        if: runner.os == 'Linux'
+        run: tools/install_build_deps.sh
+
+      - name: Install Ninja
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Build SDL
+        if: runner.os != 'Windows'
+        run: |
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            export MACOSX_DEPLOYMENT_TARGET=13.0
+          fi
+          tools/ci_annotate.sh "Build SDL ($PLATFORM)" tools/build_sdl3.sh all
+
+      - name: Build SDL
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: tools/build_sdl3.ps1 all
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: build-${{ matrix.platform }}
+          path: lib/${{ matrix.platform }}
+          if-no-files-found: error
+
+  verify:
+    needs: [resolve, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+          - platform: macos-arm64
+            runner: macos-latest
+          - platform: windows-x86_64
+            runner: windows-2025-vs2026
+    name: verify (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      PLATFORM: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-odin
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: build-${{ matrix.platform }}
+          path: lib/${{ matrix.platform }}
+
+      # Git Bash and clang on Windows, which targets the MSVC ABI like Odin.
+      - name: Check the ABI
+        run: |
+          if [[ "$RUNNER_OS" == Windows ]]; then export CC=clang; fi
+          tools/ci_annotate.sh "ABI check ($PLATFORM)" tools/abi/check.sh
+
+      - name: Run the tests
+        run: |
+          exe=bin; if [[ "$RUNNER_OS" == Windows ]]; then exe=exe; fi
+          tools/ci_annotate.sh "Tests ($PLATFORM)" odin test tests -out:tests.$exe
+          # Next to the shared library, which it finds through its rpath (the executable's directory on Windows). odin test
+          # deletes it afterwards.
+          tools/ci_annotate.sh "Tests, shared ($PLATFORM)" odin test tests -define:SDL3_SHARED=true -out:lib/"$PLATFORM"/tests-shared.$exe
+
+      - name: Package the libraries
+        run: |
+          # No AppleDouble files from macOS tar; Windows' tar (bsdtar) takes / in the paths.
+          COPYFILE_DISABLE=1 tar -czf "sdl3-$PLATFORM.tar.gz" lib/"$PLATFORM"/*SDL3*
+          tar -tzvf "sdl3-$PLATFORM.tar.gz"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: sdl3-${{ matrix.platform }}.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: [resolve, verify]
+    if: inputs.publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      SDL_VERSION: ${{ needs.resolve.outputs.sdl_version }}
+      TAG: ${{ needs.resolve.outputs.release_tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # With the token persisted, to push the pull request's branch.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-*
+          path: ${{ runner.temp }}/assets
+          merge-multiple: true
+
+      - name: Create the release
+        run: |
+          assets="$RUNNER_TEMP/assets"
+          cp upstream/sdl3_options.cmake "$assets/"
+          grep -E '^SDL_(VERSION|SHA256)=' upstream/release.env > "$assets/sources.env"
+          (cd "$assets" && sha256sum sdl3-*.tar.gz sdl3_options.cmake sources.env > SHA256SUMS && cat SHA256SUMS)
+          notes="SDL $SDL_VERSION (https://github.com/libsdl-org/SDL/releases/tag/release-$SDL_VERSION), built for size with sdl3_options.cmake: no 2D renderer, GPU API, camera, dialogs, tray or power; every video, audio and gamepad driver a game needs.
+
+          Static and shared libraries for Linux x86_64 (built on Ubuntu 22.04; every system library is loaded at run time), macOS arm64 (macOS 13+) and Windows x86_64 (Visual Studio 2026, static C runtime). Download them with \`tools/fetch_sdl3_libs.sh\` (\`tools/fetch_sdl3_libs.ps1\` on Windows). SDL is under the zlib license, which each archive holds.
+
+          Built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$assets"/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "$assets"/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "SDL $SDL_VERSION" --notes "$notes"
+          fi
+
+      - name: Open a pull request that pins the release
+        run: |
+          # Replaces the pin and its comment, if there's one already.
+          sed -i '/^RELEASE_TAG=/d; /^# The release whose libraries/d; /^# \.github\/workflows\/build-sdl3\.yml\.$/d' upstream/release.env
+          cat >> upstream/release.env <<EOF
+          # The release whose libraries match these sources, downloaded by tools/fetch_sdl3_libs.sh. Written by
+          # .github/workflows/build-sdl3.yml.
+          RELEASE_TAG=$TAG
+          EOF
+          sed -i 's/^ *//' upstream/release.env
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "The pin is up to date"
+            exit 0
+          fi
+          git diff
+
+          branch="sdl3/$TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add upstream/release.env
+          git commit -m "Pin release $TAG" -m "SDL $SDL_VERSION's libraries, built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+          git push --force origin "$branch"
+
+          if [[ -n "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json number --jq '.[].number')" ]]; then
+            echo "The pull request for $branch exists already, its branch is updated"
+            exit 0
+          fi
+          body="Pins the release [$TAG]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG) in upstream/release.env, so tools/fetch_sdl3_libs.sh downloads it.
+
+          Built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID, which checked the ABI and ran the smoke tests against the static and shared libraries on Linux, macOS and Windows.
+
+          Pull requests opened by GitHub Actions do not trigger CI: close and reopen this one to run it."
+          gh pr create --repo "$GITHUB_REPOSITORY" --base "$GITHUB_REF_NAME" --head "$branch" \
+            --title "Pin release $TAG" --body "$body" || {
+            echo "::error::Cannot open the pull request. Enable Settings > Actions > General > 'Allow GitHub Actions to create and approve pull requests', or open it by hand from $branch."
+            exit 1
+          }

@@ -55,15 +55,30 @@ Build options:
 
 The names are [vendor:sdl3](https://github.com/odin-lang/Odin/tree/master/vendor/sdl3)'s, so code written for it builds against these bindings with a different import: `SDL_` dropped (`SDL_CreateWindow` is `CreateWindow`, `SDLK_A` is `K_A`), enum members without their prefix (`EventType.QUIT`), flags as bit_sets (`WindowFlags{.RESIZABLE}`), arrays as `[^]T`, nullable pointers as `Maybe(^T)`, events taking in `CommonEvent` with `using`. Where vendor:sdl3 is wrong, these aren't: it has 13 signatures that don't match the C functions (`PeepEvents` and the atomics returning a 64-bit `int`, `GetJoystickPowerInfo` taking `percent` by value, `GetTrayMenu` returning a struct...) and a `MessageBoxColorScheme` one color too long. Android, iOS and GDK functions aren't bound.
 
+## Prebuilt libraries
+
+```sh
+tools/fetch_sdl3_libs.sh            # this machine's platform; or name them: linux-x86_64 macos-arm64 windows-x86_64
+tools/fetch_sdl3_libs.ps1           # the same in PowerShell
+```
+
+They download the release pinned in `upstream/release.env` (`RELEASE_TAG`), check it against its `SHA256SUMS`, and refuse it if it was built from another SDL or other options than the committed ones. `.github/workflows/build-sdl3.yml` builds the releases: Linux on Ubuntu 22.04 (glibc 2.35), macOS 13+, Windows with Visual Studio 2026 and the static C runtime.
+
 ## Building
 
-On Linux, with CMake, Ninja, a C compiler and the dev packages of the libraries SDL loads (Arch: `wayland wayland-protocols libdecor libx11 libxext libxcursor libxi libxfixes libxrandr libxss libxtst pipewire libpulse alsa-lib systemd-libs dbus ibus libusb libxkbcommon mesa vulkan-headers`):
+On Linux and macOS, with CMake, Ninja and a C compiler, plus on Linux the dev packages of the libraries SDL loads (`tools/install_build_deps.sh` installs them on Debian and Ubuntu; on Arch: `wayland wayland-protocols libdecor libx11 libxext libxcursor libxi libxfixes libxrandr libxss libxtst pipewire libpulse alsa-lib systemd-libs dbus ibus libusb libxkbcommon mesa`):
 
 ```sh
 tools/build_sdl3.sh            # static and shared, into lib/<os>-<arch>
 ```
 
-It downloads SDL's release tarball into `build/`, checks it against `upstream/release.env`, applies `upstream/patches/*.patch` if there are any, and checks that the configured build has everything `upstream/sdl3_expected_<os>.txt` lists: CMake turns a feature off when its dev package is missing, without failing.
+On Windows, with CMake and Visual Studio (2026, or any recent one):
+
+```powershell
+tools/build_sdl3.ps1
+```
+
+They download SDL's release tarball into `build/`, check it against `upstream/release.env`, apply `upstream/patches/*.patch` if there are any, and check that the configured build has everything `upstream/sdl3_expected_<os>.txt` lists: CMake turns a feature off when its dev package is missing, without failing.
 
 ## Updating SDL
 
