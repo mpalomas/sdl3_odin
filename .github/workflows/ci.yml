@@ -97,6 +97,7 @@ jobs:
 
       - name: Install the build dependencies
         if: runner.os == 'Linux'
+        timeout-minutes: 5
         run: tools/install_build_deps.sh
 
       - name: Install Ninja
